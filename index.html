@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>OSM expect</title>
+
+        <style>
+			
+			table {
+				border: 1px solid grey;
+			}
+			
+			.rawotlink {
+				font-size: 8pt;
+				font-family: Arial, sans-serif;
+				vertical-align: super;
+			}
+			
+			.controls {
+				border: 0.5px solid grey;
+				display: block;
+				width: 28em;
+				margin-bottom: 0.3em;
+				padding: 2px;
+			}
+			.controls label {
+				float: left;
+				width: 8em;
+			}
+        </style>
+
+        <script src="jquery.min.js"></script>
+		<script src="jquery-ui.min.js"></script>
+	
+		<link rel="stylesheet" href="jquery-ui.min.css">
+		<link rel="stylesheet" href="jquery-ui.structure.min.css">
+		<link rel="stylesheet" href="jquery-ui.theme.min.css">
+    </head>
+    <body>
+		
+		<div class="controls">
+			<label for="overpass_endpoints">Overpass endpoint:</label>
+			<select id="overpass_endpoints" size="1">
+			</select>
+		</div>
+		<div class="controls">
+		<label for="wikipage">Wikipage:</label><input type="text" id="wikipage" value="" size="25"/><br/>
+		<label for="oldid">oldid:</label><input type="text" id="oldid" size="10"/><br/>
+		<label for="secnum">section name:</label><input type="text" id="secname" value="" size="35"/>
+		</div>
+		<div class="controls">
+		<input type="button" id="loadwiki_all_button" value="load all from wiki"/> → <div class="block"><input type="button" id="check_all_button" value="check all"/><br/><input type="button" id="check_named_button" value="check named"/></div>
+		</div>
+		<div id="progress"></div>
+		
+		<div id="fromwiki"></div>
+		<table id="sectiontable">
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Query</th>
+					<th>#</th>
+					<th>Action</th>
+					<th>Result</th>
+				</tr>
+			</thead>
+			<tbody/>
+		</table>
+		
+        <script>
+		
+			var OVERPASS_ENDPOINTS = {
+				"fr":"https://api.openstreetmap.fr/oapi/interpreter",
+				"fr_http":"http://api.openstreetmap.fr/oapi/interpreter",
+				"de":"https://overpass-api.de/api/interpreter",
+				"de_http":"http://overpass-api.de/api/interpreter",
+			}
+			
+			var OVERPASS_ENDPOINT = OVERPASS_ENDPOINTS.fr;
+			
+			var LIMIT_RESULTS_TO = 10;
+			
+			var CHECK_ALL_DELAY = 750;
+			
+			var all_to_check = [];
+			
+			var howmany;
+			
+			// source: http://stackoverflow.com/a/4656873/2168905
+			function getUrlVars() {
+				var vars = {}
+				var hash = [];
+				var hashes = window.location.href.slice(window.location.href.indexOf('#') + 1).split('&');
+				for(var i = 0; i < hashes.length; i++)
+				{
+					hash = hashes[i].split('=');
+					vars[decodeURIComponent(hash[0])] = decodeURIComponent(hash[1]);
+				}
+				return vars;
+			}
+			
+			var processSection = function(sectioninfo,timestamp) {
+
+				//var r = content.match(/==\s*([\w\d]+)\s*==.*/g);
+				//var r = content.match(/\{.*\}/g);
+				//console.log(sectioninfo);
+				var secname = sectioninfo[1];
+				//console.log("Section name: " + secname);
+				var expect_info = sectioninfo[2];
+				//console.log(expect_info);
+				//console.log("%%%%%%%%%");
+				var ei = JSON.parse(expect_info);
+				var b = $("<input type='button' value='check'/>");
+				var reselem = $("<img src='images/throbber.gif'/>");
+				$(reselem).hide();
+				// reinschreiben, um das unten nach all_to_check schieben zu können
+				ei.reselem = reselem;
+				ei.secname = secname;
+				$(b).on('click', function() {
+					$(reselem).attr('src','images/throbber.gif');
+					$(reselem).show();
+					checkWithOverpass(ei.query,ei.expect_count,ei.reselem);
+				});
+				
+				all_to_check.push(ei);
+				displaySection(secname,ei,b,reselem,timestamp);
+				
+			};
+
+			var displaySection = function(name,expectinfo,checkbutton,statusimage,timestamp) {
+				//$("#fromwiki").append("<h3>"+name+"</h3>"+expectinfo.query, checkbutton, statusimage);
+				var tr = $("<tr><td>"+name+"</td><td class='querystr'>"+expectinfo.query+"</td><td>"+expectinfo.expect_count+"</td><td class='checkbutton'></td><td class='statusimage'></td></tr>");
+				var ot_link = "http://overpass-turbo.eu?R=1&Q=" + expectinfo.query.replace(/out (ids|tags);/,"/*recurse for display*/(._;>;);out body;");
+				var raw_ot_link = "http://overpass-turbo.eu?R=1&Q=" + expectinfo.query;
+				var ot_adiff_link = "http://overpass-turbo.eu?R=1&Q=[adiff:\""+timestamp+"\"]" + expectinfo.query.replace(/out (ids|tags);/,"/*recurse for display*/(._;>;);out body;");
+				$(tr).find(".checkbutton").append("<a href='"+ot_link+"' target='_blank'><img src='images/overpassturbo.ico'/></a><a href='"+raw_ot_link+"' target='_blank' class='rawotlink'>[r]</a><a href='"+ot_adiff_link+"' target='_blank' class='rawotlink'>[adiff]</a><br/>");
+				$(tr).find(".checkbutton").append(checkbutton);
+				$(tr).find(".statusimage").append(statusimage);
+				$("#sectiontable tbody").append(tr);
+			}
+			
+		
+			$("#loadwiki_all_button").on('click', function() {
+			    all_to_check = [];
+				
+				var datablock = {	action:'query',
+					titles: $("#wikipage").val(),
+					prop:'revisions',
+					rvprop: 'content|timestamp',
+					format:'json',
+				  };
+				  
+				if ($("#oldid").val() != "") {
+					datablock.rvstartid = $("#oldid").val();
+					datablock.rvendid = $("#oldid").val();
+				}
+				
+				$.ajax( {
+				  url: "http://wiki.openstreetmap.org/w/api.php",
+				  data: datablock,
+				  jsonp: 'callback',
+				  dataType: 'jsonp',
+				  success: function(data,status,xhr) {
+						$("#loadwiki_all_button").disabled = false;
+						var txt = "";
+						if (data.query == undefined) {
+							// should not be reached
+							console.log("Barf! No pages???");
+						} else {
+							$.each(data.query.pages,
+								function(i,v) {
+									if (!data.query.pages[i].revisions) {
+										$("#progress").text("oldid is probably wrong. re-check.");
+										return;
+									}
+									var content = data.query.pages[i].revisions[0]['*'];
+									content = content.replace(/\n/g,""); 
+									do {
+										//console.log(content);
+										var r = content.match(/^==\s*(.+?)\s*==.*?(\{.*?\})/);
+										if (!r) {
+											$("#fromwiki").append("<b>malformed JSON</b>");
+											return;
+										}
+										processSection(r,data.query.pages[i].revisions[0].timestamp);
+										// chop off the first section, replace with "==".
+										content = content.replace(/==.*?==.*?(==|$)/,"==")
+										// thus end of page is signalled by "=="
+									} while (content != "==");
+									
+									
+								}
+							); // end each
+						}
+				  }, // end success
+				}) // end ajax
+				$("#check_all_button").attr('disabled',false);
+				$("#check_named_button").attr('disabled',false);
+			}); // end loadwiki_button onclick
+			
+			
+			
+			var checkWithOverpass = function (query,expect_count,result_element,onSuccessCallback) {
+				$(result_element).show();
+				$.ajax( {
+					  url: OVERPASS_ENDPOINT,
+					  data: { data: query },
+					  jsonp: 'jsonp',
+					  dataType: 'jsonp',
+					  success: function(data,status,xhr) {
+							if (data == undefined) {
+								// should not be reached
+								console.log("Barf! No Overpass result???");
+							} else {
+								if (data.elements.length == expect_count) {
+									$(result_element).attr('src',"images/success.png");
+								} else {
+									$(result_element).attr('src',"images/crystal_error.png");
+									$(result_element).after(" <b>"+expect_count+" expected; got "+data.elements.length+"</b>");
+								}
+								
+								// call optional onSuccessCallback
+								if (typeof(onSuccessCallback) == "function") {
+									window.setTimeout(onSuccessCallback, CHECK_ALL_DELAY);
+								}
+							}
+
+					  } // end success
+				}) // end ajax
+			}
+			
+			$("#check_all_button").on('click', function() {
+			  howmany = all_to_check.length;
+			  $("#progress").text("0/"+howmany);
+			  checkAllRemaining();
+			});
+			
+			$("#check_named_button").on('click', function() {
+				if ($("#secname").val() != "") {
+					checkNamed($("#secname").val());
+				}
+			});
+			
+			var checkNamed = function(name) {
+				var one_elem;
+				for(var i=0;i<all_to_check.length;i++) {
+					if (all_to_check[i].secname == name) {
+						one_elem = all_to_check[i];
+						break;
+					}
+				}
+				if (one_elem) {
+					checkWithOverpass(one_elem.query,one_elem.expect_count,one_elem.reselem);
+				} else {
+					$("#progress").append("section <em>"+name+"</em> not found");
+				}
+
+			}
+			
+			var checkAllRemaining = function() {
+				var one_elem = all_to_check.pop();
+				if (one_elem != undefined) {
+					// ruft sich selbst "rekursiv" auf, d.h. übergibt sich als callback an checkWithOverpass
+					checkWithOverpass(one_elem.query,one_elem.expect_count,one_elem.reselem,checkAllRemaining);
+					$("#progress").text((howmany - all_to_check.length)+"/"+howmany);
+				}
+			}
+			
+			$("#overpass_endpoints").on('change', function() {
+				OVERPASS_ENDPOINT = $("#overpass_endpoints").val();
+			});
+			
+			$(document).ready(function() {
+				$("#check_named_button").attr('disabled',true);
+				
+				var v = getUrlVars();
+				console.log(v);
+				if (v.wikipage) {
+					$("#wikipage").val(v.wikipage);
+				}
+				if (v.sectionname) {
+					$("#secname").val(v.sectionname);
+				}
+				if (v.oldid) {
+					$("#oldid").val(v.oldid);
+				}
+				for (var ep in OVERPASS_ENDPOINTS) {
+					var option = '<option value="'+ OVERPASS_ENDPOINTS[ep] + '">' + OVERPASS_ENDPOINTS[ep] + '</option>';
+					$('#overpass_endpoints').append(option);
+				}
+			});
+			
+        </script>
+    </body>
+</html>
