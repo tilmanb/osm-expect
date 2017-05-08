@@ -44,7 +44,7 @@
 			</select>
 		</div>
 		<div class="controls">
-		<label for="wikipage">Wikipage:</label><input type="text" id="wikipage" value="" size="25"/><br/>
+		<label for="wikipage">Wikipage:</label><input type="text" id="wikipage" value="" size="25"/><span id="wikipagelink"></span><br/>
 		<label for="oldid">oldid:</label><input type="text" id="oldid" size="10"/><br/>
 		<label for="secnum">section name:</label><input type="text" id="secname" value="" size="35"/>
 		</div>
@@ -141,6 +141,7 @@
 			
 		
 			$("#loadwiki_all_button").on('click', function() {
+				$("#wikipagelink").html('<a href="//wiki.openstreetmap.org/wiki/'+$("#wikipage").val()+'">Go to page</a>');
 			    all_to_check = [];
 				
 				var datablock = {	action:'query',
