@@ -76,7 +76,7 @@
 				"fr_http":"http://api.openstreetmap.fr/oapi/interpreter",
 			}
 			
-			var OVERPASS_ENDPOINT = OVERPASS_ENDPOINTS.fr;
+			var OVERPASS_ENDPOINT = OVERPASS_ENDPOINTS.de;
 			
 			var LIMIT_RESULTS_TO = 10;
 			
@@ -132,7 +132,7 @@
 				var tr = $("<tr><td>"+name+"</td><td class='querystr'>"+expectinfo.query+"</td><td>"+expectinfo.expect_count+"</td><td class='checkbutton'></td><td class='statusimage'></td></tr>");
 				var ot_link = "http://overpass-turbo.eu?R=1&Q=" + expectinfo.query.replace(/out (ids|tags);/,"/*recurse for display*/(._;>;);out body;");
 				var raw_ot_link = "http://overpass-turbo.eu?R=1&Q=" + expectinfo.query;
-				var ot_adiff_link = "http://overpass-turbo.eu?R=1&Q=[adiff:\""+timestamp+"\"]" + expectinfo.query.replace(/out (ids|tags);/,"/*recurse for display*/(._;>;);out meta;");
+				var ot_adiff_link = "http://overpass-turbo.eu?R=1&Q=[adiff:\""+timestamp+"\"]" + expectinfo.query.replace("out:json","out:xml").replace(/out (ids|tags);/,"/*recurse for display*/(._;>;);out meta;");
 				$(tr).find(".checkbutton").append("<a href='"+ot_link+"' target='_blank'><img src='images/overpassturbo.ico'/></a><a href='"+raw_ot_link+"' target='_blank' class='rawotlink'>[r]</a><a href='"+ot_adiff_link+"' target='_blank' class='rawotlink'>[adiff]</a><br/>");
 				$(tr).find(".checkbutton").append(checkbutton);
 				$(tr).find(".statusimage").append(statusimage);
